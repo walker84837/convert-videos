@@ -70,14 +70,23 @@ process_videos() {
 	done
 }
 
+dependency_check() {
+	local program=$1
+	if ! command -v "$program" >/dev/null 2>&1; then
+		log error "$program is not installed. Install it with your package manager."
+		exit 1
+	fi
+}
+
 main() {
 	local scale="1920:1080"
 	local outdir="."
 	local extension="mp4"
+	local use_gui=0
 
 	[[ $# -eq 0 ]] && print_help
 
-	while getopts "s:o:e:dh" opt; do
+	while getopts "s:o:e:dgh" opt; do
 		case $opt in
 		s) scale="$OPTARG/x/:" ;;
 		o) outdir="$OPTARG" ;;
@@ -86,6 +95,7 @@ main() {
 			;;
 		e) extension="$OPTARG" ;;
 		d) ;;
+		g) use_gui=1 ;;
 		\?)
 			echo "Invalid option: -$OPTARG" >&2
 			exit 1
@@ -93,6 +103,19 @@ main() {
 		esac
 	done
 	shift $((OPTIND - 1))
+
+	if [[ $use_gui -eq 1 ]]; then
+		dependency_check "yad"
+
+		values=$(yad --form --title="FFmpeg Batch Converter" \
+			--field="Scale (WxH):" "1920x1080" \
+			--field="Output Directory:DIR" "$PWD" \
+			--field="Extension:" "mp4")
+
+		[[ $? -ne 0 ]] && exit 1 # user canceled
+
+		IFS="|" read -r scale outdir extension <<<"$values"
+	fi
 
 	mkdir -p "$outdir"
 

@@ -22,19 +22,19 @@ log() {
 	case $level in
 	debug)
 		level=$(uppercase "$level")
-		printf "${blue}[%s]${reset} %s" "$level" "$message"
+		printf "${blue}[%s]${reset} %s\n" "$level" "$message" >&2
 		;;
 	info)
 		level=$(uppercase "$level")
-		printf "${green}[%s]${reset} %s" "$level" "$message"
+		printf "${green}[%s]${reset} %s\n" "$level" "$message" >&2
 		;;
 	warn)
 		level=$(uppercase "$level")
-		printf "${yellow}[%s]${reset} %s" "$level" "$message"
+		printf "${yellow}[%s]${reset} %s\n" "$level" "$message" >&2
 		;;
 	error)
 		level=$(uppercase "$level")
-		printf "${red}[%s]${reset} %s" "$level" "$message"
+		printf "${red}[%s]${reset} %s\n" "$level" "$message" >&2
 		;;
 	\?) exit 1 ;;
 	esac

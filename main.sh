@@ -40,11 +40,42 @@ log() {
 	esac
 }
 
+# Usage: <message>
+error() {
+	log error "$1"
+	exit 1
+}
+
+# Usage: <resolution>
+validate_resolution() {
+	local res=$1
+	[[ -z "$res" ]] && error "Resolution cannot be empty. Try 1920x1080."
+	if ((advanced)); then
+		if ! [[ $res =~ ^[0-9]+x(-?[0-9]+)$ ]]; then
+			error "Invalid resolution '$res'. Must be WxH (e.g., 1920x1080 or 720x-1)."
+		fi
+	else
+		if ! [[ $res =~ ^[1-9][0-9]*x[1-9][0-9]*$ ]]; then
+			error "Invalid resolution '$res'. Must be WxH with positive integers (e.g., 1920x1080). Use -a for advanced syntax."
+		fi
+	fi
+}
+
+# Usage: <dir>
+validate_output_dir() {
+	local dir=$1
+	[[ -z "$dir" ]] && error "Output directory cannot be empty. Try '.' or a valid path."
+	if ! [ -d "$dir" ] && ! mkdir -p "$dir" 2>/dev/null; then
+		error "Cannot create output directory '$dir'. Check permissions or try a different path."
+	fi
+}
+
 print_help() {
 	echo "Usage: $0 [-s WxH] [-o DIR]"
 	echo "  -e mp4   Extension of videos to process (default: mp4)"
 	echo "  -s WxH   Scale videos to resolution (default: 1920x1080)"
 	echo "  -o DIR   Output directory (default: current directory)"
+	echo "  -a       Allow advanced FFmpeg resolution syntax (e.g., 720x-1)"
 	echo "  -d       Run with default settings"
 	echo "  -h       Show this help menu"
 	exit 0
@@ -83,12 +114,16 @@ main() {
 	local outdir="."
 	local extension="mp4"
 	local use_gui=0
+	local advanced=0
 
 	[[ $# -eq 0 ]] && print_help
 
-	while getopts "s:o:e:dgh" opt; do
+	while getopts "s:o:e:dgha" opt; do
 		case $opt in
-		s) scale="$OPTARG/x/:" ;;
+		s)
+			validate_resolution "$OPTARG"
+			scale="${OPTARG/x/:}"
+			;;
 		o) outdir="$OPTARG" ;;
 		h)
 			print_help
@@ -96,6 +131,7 @@ main() {
 		e) extension="$OPTARG" ;;
 		d) ;;
 		g) use_gui=1 ;;
+		a) advanced=1 ;;
 		\?)
 			echo "Invalid option: -$OPTARG" >&2
 			exit 1
@@ -107,15 +143,20 @@ main() {
 	if [[ $use_gui -eq 1 ]]; then
 		dependency_check "yad"
 
-		values=$(yad --form --title="FFmpeg Batch Converter" \
+		local values
+		if ! values=$(yad --form --title="FFmpeg Batch Converter" \
 			--field="Scale (WxH):" "1920x1080" \
 			--field="Output Directory:DIR" "$PWD" \
-			--field="Extension:" "mp4")
-
-		[[ $? -ne 0 ]] && exit 1 # user canceled
+			--field="Extension:" "mp4"); then
+			exit 1 # user canceled
+		fi
 
 		IFS="|" read -r scale outdir extension <<<"$values"
+		validate_resolution "$scale"
+		scale="${scale/x/:}"
 	fi
+
+	validate_output_dir "$outdir"
 
 	mkdir -p "$outdir"
 

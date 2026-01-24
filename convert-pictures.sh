@@ -38,6 +38,37 @@ log() {
 	esac
 }
 
+# Usage: <message>
+error() {
+	log error "$1"
+	exit 1
+}
+
+# Usage: <action>
+validate_action() {
+	case $1 in
+	NOTHING | DELETE | ARCHIVE) ;;
+	*) error "Invalid action '$1'. Must be NOTHING, DELETE, or ARCHIVE." ;;
+	esac
+}
+
+# Usage: <extension>
+validate_extension() {
+	case $1 in
+	png | jpg | jpeg | webp | tiff) ;;
+	*) error "Invalid extension '$1'. Must be png, jpg, jpeg, webp, or tiff." ;;
+	esac
+}
+
+# Usage: <dir>
+validate_output_dir() {
+	local dir=$1
+	[[ -z "$dir" ]] && error "Output directory cannot be empty. Try '.' or a valid path."
+	if ! [ -d "$dir" ] && ! mkdir -p "$dir" 2>/dev/null; then
+		error "Cannot create output directory '$dir'. Check permissions or try a different path."
+	fi
+}
+
 print_help() {
 	cat <<EOF
 Usage: ${0##*/} [-a ACTION] [-o DIR] [-e EXT] [-g]
@@ -64,22 +95,26 @@ gui_prompt() {
 	fi
 
 	local result
-	result=$(yad --form \
+	if ! result=$(yad --form \
 		--title="Image Converter" \
 		--field="Action:CB" "NOTHING!DELETE!ARCHIVE" \
 		--field="Output folder:DIR" "$(pwd)" \
 		--field="Extension:CB" "png!jpg!jpeg!webp!tiff" \
-		--button=gtk-ok:0 --button=gtk-cancel:1)
-
-	[[ $? -ne 0 ]] && exit 0 # user cancelled
+		--button=gtk-ok:0 --button=gtk-cancel:1); then
+		exit 0 # user cancelled
+	fi
 
 	IFS="|" read -r gui_action gui_out_dir gui_ext <<<"$result"
 	action=$(uppercase "$gui_action")
 	output_folder="$gui_out_dir"
 	out_extension=$(echo "$gui_ext" | tr '[:upper:]' '[:lower:]')
+	validate_action "$action"
+	validate_extension "$out_extension"
+	validate_output_dir "$output_folder"
 }
 
 main() {
+	# check if the script was called with no arguments
 	[[ $# -eq 0 ]] && {
 		print_help
 		exit 0
@@ -109,14 +144,9 @@ main() {
 		gui_prompt
 	fi
 
-	case $action in
-	NOTHING | DELETE | ARCHIVE) ;;
-	*)
-		log error "Invalid action: $action"
-		print_help
-		exit 1
-		;;
-	esac
+	validate_action "$action"
+	validate_extension "$out_extension"
+	validate_output_dir "$output_folder"
 
 	if [[ ! -d "$output_folder" ]]; then
 		log info "Creating output folder: $output_folder"
@@ -137,7 +167,8 @@ main() {
 	fi
 
 	# if archiving, prepare a temporary list
-	local archive_path="${output_folder}/archived_originals_$(date +%Y%m%d_%H%M%S).tar.gz"
+	local archive_path
+	archive_path="${output_folder}/archived_originals_$(date +%Y%m%d_%H%M%S).tar.gz"
 	local to_archive=()
 
 	for file in "${files[@]}"; do
